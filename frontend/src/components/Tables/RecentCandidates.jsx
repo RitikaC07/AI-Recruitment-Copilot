@@ -1,25 +1,4 @@
-const candidates = [
-  {
-    name: "Sarah Johnson",
-    role: "Frontend Developer",
-    experience: "5 Years",
-    status: "Shortlisted",
-  },
-  {
-    name: "Michael Chen",
-    role: "Python Developer",
-    experience: "3 Years",
-    status: "Interview",
-  },
-  {
-    name: "Emma Watson",
-    role: "UI/UX Designer",
-    experience: "2 Years",
-    status: "Reviewing",
-  },
-];
-
-function RecentCandidates() {
+function RecentCandidates({ candidates }) {
   return (
     <div className="bg-white rounded-3xl shadow-md border border-gray-100 p-6 mt-10">
 
@@ -30,49 +9,74 @@ function RecentCandidates() {
       <table className="w-full">
 
         <thead>
-
           <tr className="border-b">
-
             <th className="text-left py-3">Candidate</th>
-
-            <th className="text-left">Role</th>
-
+            <th className="text-left">Email</th>
             <th className="text-left">Experience</th>
-
-            <th className="text-left">Status</th>
-
+            <th className="text-left">Skills</th>
           </tr>
-
         </thead>
 
         <tbody>
 
-          {candidates.map((candidate, index) => (
+          {candidates && candidates.length > 0 ? (
 
-            <tr
-              key={index}
-              className="border-b hover:bg-gray-50 transition"
-            >
+            candidates.map((candidate) => (
 
-              <td className="py-4">{candidate.name}</td>
+              <tr
+                key={candidate._id}
+                className="border-b hover:bg-gray-50 transition"
+              >
 
-              <td>{candidate.role}</td>
+                <td className="py-4 font-medium">
+                  {candidate.name}
+                </td>
 
-              <td>{candidate.experience}</td>
+                <td>
+                  {candidate.email}
+                </td>
 
-              <td>
+                <td>
+                  {candidate.experience || "Fresher"}
+                </td>
 
-                <span className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-sm">
+                <td>
+                  <div className="flex flex-wrap gap-2">
 
-                  {candidate.status}
+                    {(candidate.skills || [])
+                      .slice(0, 3)
+                      .map((skill, index) => (
 
-                </span>
+                        <span
+                          key={index}
+                          className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full text-xs"
+                        >
+                          {skill}
+                        </span>
 
+                      ))}
+
+                  </div>
+                </td>
+
+              </tr>
+
+            ))
+
+          ) : (
+
+            <tr>
+
+              <td
+                colSpan="4"
+                className="text-center py-6 text-gray-500"
+              >
+                No candidates uploaded yet.
               </td>
 
             </tr>
 
-          ))}
+          )}
 
         </tbody>
 

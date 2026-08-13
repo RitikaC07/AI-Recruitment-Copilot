@@ -1,31 +1,46 @@
+import axios from "axios";
 import { UploadCloud } from "lucide-react";
 
-function UploadBox({ selectedFile, setSelectedFile, setProgress }) {
+function UploadBox({ selectedFile, setSelectedFile, setProgress ,setCandidate,fetchCandidates,}) {
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
+  const file = e.target.files[0];
 
-    const file = e.target.files[0];
+  if (!file) return;
 
-    if (!file) return;
+  setSelectedFile(file);
 
-    setSelectedFile(file);
+  const formData = new FormData();
+  formData.append("file", file);
 
-    // Fake upload progress for now
-    let value = 0;
+  try {
+    const response = await axios.post(
+      "http://127.0.0.1:8000/resume",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
 
-    const timer = setInterval(() => {
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
 
-      value += 10;
-
-      setProgress(value);
-
-      if (value >= 100) {
-        clearInterval(timer);
+          setProgress(percent);
+        },
       }
+    );
 
-    }, 100);
-  };
+    setCandidate(response.data.candidate);
+    fetchCandidates();
+    alert("Resume uploaded successfully!");
 
+  } catch (error) {
+    console.error(error);
+    alert("Upload failed.");
+  }
+};
   return (
     <div className="bg-white rounded-3xl shadow-lg p-10 border border-gray-200">
 

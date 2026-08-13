@@ -1,12 +1,11 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import MainLayout from "./layouts/MainLayout";
-
+import JobPostings from "./pages/JobPostings/JobPostings";
 import Dashboard from "./pages/Dashboard/Dashboard";
 import ResumeUpload from "./pages/ResumeUpload/ResumeUpload";
 import Candidates from "./pages/Candidates/Candidates";
 import CandidateProfile from "./pages/CandidateProfile/CandidateProfile";
-import JobPostings from "./pages/JobPostings/JobPostings";
 import AIMatching from "./pages/AIMatching/AIMatching";
 import Analytics from "./pages/Analytics/Analytics";
 import Settings from "./pages/Settings/Settings";

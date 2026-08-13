@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import {
   Users,
   Briefcase,
@@ -5,11 +7,30 @@ import {
   Brain,
 } from "lucide-react";
 
+import API from "../../api/api";
+
 import StatCard from "../../components/cards/StatCard";
 import SectionTitle from "../../components/common/SectionTitle";
 import RecentCandidates from "../../components/tables/RecentCandidates";
 
 function Dashboard() {
+  const [dashboardData, setDashboardData] = useState({
+  total_candidates: 0,
+  recent_candidates: [],
+});
+
+useEffect(() => {
+  fetchDashboard();
+}, []);
+
+const fetchDashboard = async () => {
+  try {
+    const response = await API.get("/dashboard");
+    setDashboardData(response.data);
+  } catch (error) {
+    console.error(error);
+  }
+};
   return (
     <div className="p-2">
 
@@ -22,8 +43,8 @@ function Dashboard() {
 
         <StatCard
           title="Total Candidates"
-          value="247"
-          subtitle="+12 this week"
+          value={dashboardData.total_candidates}
+          subtitle="Uploaded resumes"
           icon={<Users />}
           color="bg-gradient-to-r from-indigo-500 to-purple-600"
         />
@@ -38,7 +59,7 @@ function Dashboard() {
 
         <StatCard
           title="Resumes Uploaded"
-          value="356"
+          value={dashboardData.total_candidates}
           subtitle="28 Today"
           icon={<FileText />}
           color="bg-gradient-to-r from-pink-500 to-rose-500"
@@ -54,7 +75,9 @@ function Dashboard() {
 
       </div>
 
-      <RecentCandidates />
+      <RecentCandidates 
+      candidates={dashboardData.recent_candidates}
+      />
 
     </div>
   );
