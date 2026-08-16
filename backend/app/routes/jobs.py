@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.database import db, candidate_collection
 from app.services.skill_gap_analyzer import analyze_skill_gap
+from app.services.interview_generator import generate_interview_questions
 from datetime import datetime
 from bson import ObjectId
 
@@ -106,4 +107,42 @@ async def skill_gap_analysis(job_id: str, candidate_id: str):
         raise HTTPException(
             status_code=500,
             detail=f"Skill gap analysis failed: {str(e)}"
+        )
+@router.post("/jobs/{job_id}/interview-questions")
+async def generate_questions(job_id: str, question_type: str = "Technical Skills"):
+
+    try:
+        job = await job_collection.find_one({
+            "_id": ObjectId(job_id)
+        })
+
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid job ID"
+        )
+
+    if not job:
+        raise HTTPException(
+            status_code=404,
+            detail="Job not found"
+        )
+
+    try:
+        result = generate_interview_questions(
+            job,
+            question_type
+        )
+
+        return {
+            "success": True,
+            "job": job.get("title", ""),
+            "question_type": question_type,
+            "questions": result.get("questions", [])
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate questions: {str(e)}"
         )

@@ -6,6 +6,7 @@ import {
   Users,
   Briefcase,
   Brain,
+  MessageSquare,
   BarChart3,
   Settings,
 } from "lucide-react";
@@ -36,6 +37,11 @@ const menuItems = [
     name: "AI Matching",
     path: "/matching",
     icon: Brain,
+  },
+  {
+  name: "Interview Assistant",
+  path: "/interview",
+  icon: MessageSquare,
   },
   {
     name: "Analytics",

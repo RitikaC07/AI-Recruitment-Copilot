@@ -15,22 +15,69 @@ import RecentCandidates from "../../components/tables/RecentCandidates";
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState({
-  total_candidates: 0,
-  recent_candidates: [],
-});
+    total_candidates: 0,
+    recent_candidates: [],
+  });
 
-useEffect(() => {
-  fetchDashboard();
-}, []);
+  const [activeJobs, setActiveJobs] = useState(0);
+  const [aiMatchScore, setAiMatchScore] = useState(0);
 
-const fetchDashboard = async () => {
-  try {
-    const response = await API.get("/dashboard");
-    setDashboardData(response.data);
-  } catch (error) {
-    console.error(error);
-  }
-};
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
+
+  const fetchDashboard = async () => {
+    try {
+      // Existing dashboard data
+      const dashboardResponse = await API.get("/dashboard");
+
+      setDashboardData(dashboardResponse.data);
+
+      // Get jobs
+      const jobsResponse = await API.get("/jobs");
+
+      const jobs = jobsResponse.data || [];
+
+      setActiveJobs(jobs.length);
+
+      // Get matching scores for all jobs
+      if (jobs.length > 0) {
+        const matchResponses = await Promise.all(
+          jobs.map((job) =>
+            API.get(`/jobs/${job._id}/matches`)
+          )
+        );
+
+        const allScores = matchResponses.flatMap(
+          (response) =>
+            (response.data.matches || []).map(
+              (candidate) => candidate.match_score
+            )
+        );
+
+        if (allScores.length > 0) {
+          const averageScore =
+            allScores.reduce(
+              (sum, score) => sum + score,
+              0
+            ) / allScores.length;
+
+          setAiMatchScore(Math.round(averageScore));
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    }
+  };
+
+  // AI score description
+  const getScoreLabel = () => {
+    if (aiMatchScore >= 80) return "Excellent";
+    if (aiMatchScore >= 60) return "Good";
+    if (aiMatchScore >= 40) return "Average";
+    return "Needs Improvement";
+  };
+
   return (
     <div className="p-2">
 
@@ -41,6 +88,7 @@ const fetchDashboard = async () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
 
+        {/* Total Candidates */}
         <StatCard
           title="Total Candidates"
           value={dashboardData.total_candidates}
@@ -49,34 +97,37 @@ const fetchDashboard = async () => {
           color="bg-gradient-to-r from-indigo-500 to-purple-600"
         />
 
+        {/* Active Jobs */}
         <StatCard
           title="Active Jobs"
-          value="18"
-          subtitle="4 New Openings"
+          value={activeJobs}
+          subtitle="Current job openings"
           icon={<Briefcase />}
           color="bg-gradient-to-r from-blue-500 to-cyan-500"
         />
 
+        {/* Resumes Uploaded */}
         <StatCard
           title="Resumes Uploaded"
           value={dashboardData.total_candidates}
-          subtitle="28 Today"
+          subtitle="Total resumes"
           icon={<FileText />}
           color="bg-gradient-to-r from-pink-500 to-rose-500"
         />
 
+        {/* AI Match Score */}
         <StatCard
           title="AI Match Score"
-          value="97%"
-          subtitle="Excellent"
+          value={`${aiMatchScore}%`}
+          subtitle={getScoreLabel()}
           icon={<Brain />}
           color="bg-gradient-to-r from-emerald-500 to-green-600"
         />
 
       </div>
 
-      <RecentCandidates 
-      candidates={dashboardData.recent_candidates}
+      <RecentCandidates
+        candidates={dashboardData.recent_candidates}
       />
 
     </div>
