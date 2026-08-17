@@ -3,6 +3,9 @@ from app.database import db, candidate_collection
 from app.services.skill_gap_analyzer import analyze_skill_gap
 from app.services.interview_generator import generate_interview_questions
 from datetime import datetime
+from pydantic import BaseModel
+from typing import List
+from app.services.interview_assistant import generate_next_interview_response
 from bson import ObjectId
 
 router = APIRouter()
@@ -145,4 +148,94 @@ async def generate_questions(job_id: str, question_type: str = "Technical Skills
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate questions: {str(e)}"
+        )
+
+class InterviewMessage(BaseModel):
+    sender: str
+    text: str
+
+
+class InterviewChatRequest(BaseModel):
+    candidate_id: str
+    job_id: str
+    messages: List[InterviewMessage]
+
+
+@router.post("/interview/chat")
+async def interview_chat(request: InterviewChatRequest):
+    """
+    Generate the next AI interview response based on
+    the candidate, job, and previous conversation.
+    """
+
+    try:
+        # -----------------------------
+        # Get candidate
+        # -----------------------------
+
+        candidate = await candidate_collection.find_one({
+            "_id": ObjectId(request.candidate_id)
+        })
+
+        if not candidate:
+            raise HTTPException(
+                status_code=404,
+                detail="Candidate not found"
+            )
+
+        # -----------------------------
+        # Get job
+        # -----------------------------
+
+        job = await job_collection.find_one({
+            "_id": ObjectId(request.job_id)
+        })
+
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail="Job not found"
+            )
+
+        # -----------------------------
+        # Convert MongoDB IDs
+        # -----------------------------
+
+        candidate["_id"] = str(candidate["_id"])
+        job["_id"] = str(job["_id"])
+
+        # -----------------------------
+        # Convert messages
+        # -----------------------------
+
+        messages = [
+            {
+                "sender": message.sender,
+                "text": message.text
+            }
+            for message in request.messages
+        ]
+
+        # -----------------------------
+        # Ask Gemini
+        # -----------------------------
+
+        result = generate_next_interview_response(
+            candidate,
+            job,
+            messages
+        )
+
+        return {
+            "success": True,
+            "response": result
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Interview conversation failed: {str(e)}"
         )
