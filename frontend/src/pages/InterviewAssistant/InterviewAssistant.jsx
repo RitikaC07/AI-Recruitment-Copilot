@@ -28,6 +28,7 @@ function InterviewAssistant() {
   const [answer, setAnswer] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [interviewComplete, setInterviewComplete] = useState(false);
+  const [interviewEnded, setInterviewEnded] = useState(false);
 
   // Fetch jobs and candidates
   useEffect(() => {
@@ -93,6 +94,7 @@ function InterviewAssistant() {
       setSendingMessage(true);
       setInterviewStarted(true);
       setInterviewComplete(false);
+      setInterviewEnded(false);
       setMessages([]);
       setAnswer("");
 
@@ -132,7 +134,12 @@ function InterviewAssistant() {
 
   // Send candidate answer to AI
   const sendAnswer = async () => {
-    if (!answer.trim() || sendingMessage || interviewComplete) {
+    if (
+      !answer.trim() ||
+      sendingMessage ||
+      interviewComplete ||
+      interviewEnded
+    ) {
       return;
     }
 
@@ -187,6 +194,21 @@ function InterviewAssistant() {
     } finally {
       setSendingMessage(false);
     }
+  };
+
+  // End interview
+  const endInterview = () => {
+    const confirmEnd = window.confirm(
+      "Are you sure you want to end this interview?"
+    );
+
+    if (!confirmEnd) {
+      return;
+    }
+
+    setInterviewEnded(true);
+    setInterviewComplete(true);
+    setAnswer("");
   };
 
   // Allow Enter to send
@@ -253,6 +275,8 @@ function InterviewAssistant() {
                 setQuestions([]);
                 setInterviewStarted(false);
                 setMessages([]);
+                setInterviewComplete(false);
+                setInterviewEnded(false);
               }}
               className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
@@ -414,6 +438,7 @@ function InterviewAssistant() {
                 setInterviewStarted(false);
                 setMessages([]);
                 setInterviewComplete(false);
+                setInterviewEnded(false);
               }}
               className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
@@ -570,17 +595,21 @@ function InterviewAssistant() {
               </div>
 
 
-              {/* Interview Completed */}
+              {/* Interview Completed / Ended */}
               {interviewComplete ? (
 
                 <div className="mt-4 bg-green-50 border border-green-200 rounded-xl p-4 text-center">
 
                   <p className="font-semibold text-green-800">
-                    Interview Completed 🎉
+                    {interviewEnded
+                      ? "Interview Ended"
+                      : "Interview Completed 🎉"}
                   </p>
 
                   <p className="text-sm text-green-700 mt-1">
-                    The AI interview has been completed successfully.
+                    {interviewEnded
+                      ? "The interview was ended by the recruiter."
+                      : "The AI interview has been completed successfully."}
                   </p>
 
                 </div>
@@ -588,29 +617,42 @@ function InterviewAssistant() {
               ) : (
 
                 /* Answer Box */
-                <div className="mt-4 flex gap-2">
+                <div>
 
-                  <textarea
-                    value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    disabled={sendingMessage}
-                    placeholder="Type your answer here..."
-                    rows={3}
-                    className="flex-1 resize-none border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100"
-                  />
+                  <div className="mt-4 flex gap-2">
 
+                    <textarea
+                      value={answer}
+                      onChange={(e) => setAnswer(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      disabled={sendingMessage}
+                      placeholder="Type your answer here..."
+                      rows={3}
+                      className="flex-1 resize-none border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100"
+                    />
+
+                    <button
+                      onClick={sendAnswer}
+                      disabled={
+                        !answer.trim() ||
+                        sendingMessage
+                      }
+                      className="self-end w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 transition disabled:opacity-50"
+                    >
+
+                      <Send size={19} />
+
+                    </button>
+
+                  </div>
+
+                  {/* End Interview Button */}
                   <button
-                    onClick={sendAnswer}
-                    disabled={
-                      !answer.trim() ||
-                      sendingMessage
-                    }
-                    className="self-end w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 transition disabled:opacity-50"
+                    onClick={endInterview}
+                    disabled={sendingMessage}
+                    className="w-full mt-3 border border-red-300 text-red-600 px-5 py-3 rounded-xl font-medium hover:bg-red-50 transition disabled:opacity-50"
                   >
-
-                    <Send size={19} />
-
+                    End Interview
                   </button>
 
                 </div>
@@ -618,14 +660,17 @@ function InterviewAssistant() {
               )}
 
               {!interviewComplete && (
+
                 <p className="text-xs text-gray-400 mt-2">
                   Press Enter to send • Shift + Enter for a new line
                 </p>
+
               )}
 
             </div>
 
           )}
+
 
           {/* Before interview */}
           {!interviewStarted && (
