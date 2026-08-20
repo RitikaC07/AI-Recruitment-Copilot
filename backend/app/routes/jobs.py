@@ -6,6 +6,10 @@ from datetime import datetime
 from pydantic import BaseModel
 from typing import List
 from app.services.interview_assistant import generate_next_interview_response
+from app.services.interview_assistant import (
+    generate_next_interview_response,
+    evaluate_interview
+)
 from bson import ObjectId
 
 router = APIRouter()
@@ -111,6 +115,7 @@ async def skill_gap_analysis(job_id: str, candidate_id: str):
             status_code=500,
             detail=f"Skill gap analysis failed: {str(e)}"
         )
+    
 @router.post("/jobs/{job_id}/interview-questions")
 async def generate_questions(job_id: str, question_type: str = "Technical Skills"):
 
@@ -166,6 +171,9 @@ async def interview_chat(request: InterviewChatRequest):
     """
     Generate the next AI interview response based on
     the candidate, job, and previous conversation.
+
+    The AI also evaluates the candidate's latest answer
+    and provides a final evaluation when the interview ends.
     """
 
     try:
@@ -226,9 +234,40 @@ async def interview_chat(request: InterviewChatRequest):
             messages
         )
 
+        # -----------------------------
+        # Return AI response
+        # -----------------------------
+
         return {
             "success": True,
-            "response": result
+            "response": {
+                "message": result.get(
+                    "message",
+                    ""
+                ),
+
+                "question": result.get(
+                    "question",
+                    ""
+                ),
+
+                "interview_complete": result.get(
+                    "interview_complete",
+                    False
+                ),
+
+                # Evaluation of latest answer
+                "evaluation": result.get(
+                    "evaluation",
+                    {}
+                ),
+
+                # Overall evaluation when interview ends
+                "final_evaluation": result.get(
+                    "final_evaluation",
+                    {}
+                )
+            }
         }
 
     except HTTPException:
@@ -238,4 +277,84 @@ async def interview_chat(request: InterviewChatRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Interview conversation failed: {str(e)}"
+        )
+
+@router.post("/interview/evaluate")
+async def evaluate_completed_interview(request: InterviewChatRequest):
+    """
+    Evaluate the candidate after the interview is completed.
+    """
+
+    try:
+        # -----------------------------
+        # Get candidate
+        # -----------------------------
+
+        candidate = await candidate_collection.find_one({
+            "_id": ObjectId(request.candidate_id)
+        })
+
+        if not candidate:
+            raise HTTPException(
+                status_code=404,
+                detail="Candidate not found"
+            )
+
+        # -----------------------------
+        # Get job
+        # -----------------------------
+
+        job = await job_collection.find_one({
+            "_id": ObjectId(request.job_id)
+        })
+
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail="Job not found"
+            )
+
+        # -----------------------------
+        # Convert MongoDB IDs
+        # -----------------------------
+
+        candidate["_id"] = str(candidate["_id"])
+        job["_id"] = str(job["_id"])
+
+        # -----------------------------
+        # Convert messages
+        # -----------------------------
+
+        messages = [
+            {
+                "sender": message.sender,
+                "text": message.text
+            }
+            for message in request.messages
+        ]
+
+        # -----------------------------
+        # Evaluate interview
+        # -----------------------------
+
+        evaluation = evaluate_interview(
+            candidate,
+            job,
+            messages
+        )
+
+        return {
+            "success": True,
+            "candidate": candidate.get("name", ""),
+            "job": job.get("title", ""),
+            "evaluation": evaluation
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Interview evaluation failed: {str(e)}"
         )
