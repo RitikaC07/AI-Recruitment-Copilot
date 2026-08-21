@@ -5,7 +5,6 @@ from app.services.interview_generator import generate_interview_questions
 from datetime import datetime
 from pydantic import BaseModel
 from typing import List
-from app.services.interview_assistant import generate_next_interview_response
 from app.services.interview_assistant import (
     generate_next_interview_response,
     evaluate_interview
@@ -16,6 +15,10 @@ router = APIRouter()
 
 job_collection = db["jobs"]
 
+
+# =========================================================
+# CREATE JOB
+# =========================================================
 
 @router.post("/jobs")
 async def create_job(job: dict):
@@ -46,6 +49,10 @@ async def create_job(job: dict):
     }
 
 
+# =========================================================
+# GET ALL JOBS
+# =========================================================
+
 @router.get("/jobs")
 async def get_jobs():
     """
@@ -60,8 +67,15 @@ async def get_jobs():
     return jobs
 
 
+# =========================================================
+# SKILL GAP ANALYSIS
+# =========================================================
+
 @router.post("/jobs/{job_id}/candidates/{candidate_id}/skill-gap")
-async def skill_gap_analysis(job_id: str, candidate_id: str):
+async def skill_gap_analysis(
+    job_id: str,
+    candidate_id: str
+):
     """
     Analyze candidate skill gap for a specific job using Gemini.
     """
@@ -115,28 +129,40 @@ async def skill_gap_analysis(job_id: str, candidate_id: str):
             status_code=500,
             detail=f"Skill gap analysis failed: {str(e)}"
         )
-    
+
+
+# =========================================================
+# GENERATE INTERVIEW QUESTIONS
+# =========================================================
+
 @router.post("/jobs/{job_id}/interview-questions")
-async def generate_questions(job_id: str, question_type: str = "Technical Skills"):
+async def generate_questions(
+    job_id: str,
+    question_type: str = "Technical Skills"
+):
 
     try:
+
         job = await job_collection.find_one({
             "_id": ObjectId(job_id)
         })
 
     except Exception:
+
         raise HTTPException(
             status_code=400,
             detail="Invalid job ID"
         )
 
     if not job:
+
         raise HTTPException(
             status_code=404,
             detail="Job not found"
         )
 
     try:
+
         result = generate_interview_questions(
             job,
             question_type
@@ -146,14 +172,23 @@ async def generate_questions(job_id: str, question_type: str = "Technical Skills
             "success": True,
             "job": job.get("title", ""),
             "question_type": question_type,
-            "questions": result.get("questions", [])
+            "questions": result.get(
+                "questions",
+                []
+            )
         }
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate questions: {str(e)}"
         )
+
+
+# =========================================================
+# INTERVIEW MODELS
+# =========================================================
 
 class InterviewMessage(BaseModel):
     sender: str
@@ -166,55 +201,90 @@ class InterviewChatRequest(BaseModel):
     messages: List[InterviewMessage]
 
 
-@router.post("/interview/chat")
-async def interview_chat(request: InterviewChatRequest):
-    """
-    Generate the next AI interview response based on
-    the candidate, job, and previous conversation.
+# =========================================================
+# START / CONTINUE AI INTERVIEW
+# =========================================================
 
-    The AI also evaluates the candidate's latest answer
-    and provides a final evaluation when the interview ends.
+@router.post("/interview/chat")
+async def interview_chat(
+    request: InterviewChatRequest
+):
+    """
+    Generate the next AI interview response.
+
+    When the interview starts:
+        Candidate status -> Active
+
+    During the interview:
+        Candidate remains Active
     """
 
     try:
-        # -----------------------------
+
+        # -------------------------------------------------
         # Get candidate
-        # -----------------------------
+        # -------------------------------------------------
 
         candidate = await candidate_collection.find_one({
             "_id": ObjectId(request.candidate_id)
         })
 
         if not candidate:
+
             raise HTTPException(
                 status_code=404,
                 detail="Candidate not found"
             )
 
-        # -----------------------------
+        # -------------------------------------------------
         # Get job
-        # -----------------------------
+        # -------------------------------------------------
 
         job = await job_collection.find_one({
             "_id": ObjectId(request.job_id)
         })
 
         if not job:
+
             raise HTTPException(
                 status_code=404,
                 detail="Job not found"
             )
 
-        # -----------------------------
+        # -------------------------------------------------
+        # Update candidate status to Active
+        #
+        # This happens when the interview is started.
+        # -------------------------------------------------
+
+        await candidate_collection.update_one(
+            {
+                "_id": ObjectId(request.candidate_id)
+            },
+            {
+                "$set": {
+                    "interview_status": "Active",
+                    "interview_job_id": request.job_id,
+                    "interview_started_at": datetime.utcnow()
+                }
+            }
+        )
+
+        # -------------------------------------------------
         # Convert MongoDB IDs
-        # -----------------------------
+        # -------------------------------------------------
 
-        candidate["_id"] = str(candidate["_id"])
-        job["_id"] = str(job["_id"])
+        candidate["_id"] = str(
+            candidate["_id"]
+        )
 
-        # -----------------------------
+        job["_id"] = str(
+            job["_id"]
+        )
+
+        # -------------------------------------------------
         # Convert messages
-        # -----------------------------
+        # -------------------------------------------------
 
         messages = [
             {
@@ -224,9 +294,9 @@ async def interview_chat(request: InterviewChatRequest):
             for message in request.messages
         ]
 
-        # -----------------------------
+        # -------------------------------------------------
         # Ask Gemini
-        # -----------------------------
+        # -------------------------------------------------
 
         result = generate_next_interview_response(
             candidate,
@@ -234,13 +304,14 @@ async def interview_chat(request: InterviewChatRequest):
             messages
         )
 
-        # -----------------------------
+        # -------------------------------------------------
         # Return AI response
-        # -----------------------------
+        # -------------------------------------------------
 
         return {
             "success": True,
             "response": {
+
                 "message": result.get(
                     "message",
                     ""
@@ -256,13 +327,11 @@ async def interview_chat(request: InterviewChatRequest):
                     False
                 ),
 
-                # Evaluation of latest answer
                 "evaluation": result.get(
                     "evaluation",
                     {}
                 ),
 
-                # Overall evaluation when interview ends
                 "final_evaluation": result.get(
                     "final_evaluation",
                     {}
@@ -271,59 +340,80 @@ async def interview_chat(request: InterviewChatRequest):
         }
 
     except HTTPException:
+
         raise
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=f"Interview conversation failed: {str(e)}"
         )
 
+
+# =========================================================
+# FINAL INTERVIEW EVALUATION
+# =========================================================
+
 @router.post("/interview/evaluate")
-async def evaluate_completed_interview(request: InterviewChatRequest):
+async def evaluate_completed_interview(
+    request: InterviewChatRequest
+):
     """
-    Evaluate the candidate after the interview is completed.
+    Evaluate the candidate after the recruiter ends
+    the interview.
+
+    The final AI recommendation is saved to the
+    candidate's MongoDB document.
     """
 
     try:
-        # -----------------------------
+
+        # -------------------------------------------------
         # Get candidate
-        # -----------------------------
+        # -------------------------------------------------
 
         candidate = await candidate_collection.find_one({
             "_id": ObjectId(request.candidate_id)
         })
 
         if not candidate:
+
             raise HTTPException(
                 status_code=404,
                 detail="Candidate not found"
             )
 
-        # -----------------------------
+        # -------------------------------------------------
         # Get job
-        # -----------------------------
+        # -------------------------------------------------
 
         job = await job_collection.find_one({
             "_id": ObjectId(request.job_id)
         })
 
         if not job:
+
             raise HTTPException(
                 status_code=404,
                 detail="Job not found"
             )
 
-        # -----------------------------
+        # -------------------------------------------------
         # Convert MongoDB IDs
-        # -----------------------------
+        # -------------------------------------------------
 
-        candidate["_id"] = str(candidate["_id"])
-        job["_id"] = str(job["_id"])
+        candidate["_id"] = str(
+            candidate["_id"]
+        )
 
-        # -----------------------------
+        job["_id"] = str(
+            job["_id"]
+        )
+
+        # -------------------------------------------------
         # Convert messages
-        # -----------------------------
+        # -------------------------------------------------
 
         messages = [
             {
@@ -333,9 +423,9 @@ async def evaluate_completed_interview(request: InterviewChatRequest):
             for message in request.messages
         ]
 
-        # -----------------------------
-        # Evaluate interview
-        # -----------------------------
+        # -------------------------------------------------
+        # Evaluate complete interview using Gemini
+        # -------------------------------------------------
 
         evaluation = evaluate_interview(
             candidate,
@@ -343,17 +433,110 @@ async def evaluate_completed_interview(request: InterviewChatRequest):
             messages
         )
 
+        # -------------------------------------------------
+        # Get final score and recommendation
+        # -------------------------------------------------
+
+        overall_score = evaluation.get(
+            "overall_score",
+            0
+        )
+
+        recommendation = evaluation.get(
+            "recommendation",
+            "FURTHER REVIEW"
+        )
+
+        # -------------------------------------------------
+        # Update candidate status
+        # -------------------------------------------------
+
+        # Normalize recommendation
+        recommendation_upper = str(
+            recommendation
+        ).upper()
+
+        if recommendation_upper == "SELECTED":
+
+            interview_status = "Selected"
+
+        elif recommendation_upper in [
+            "REJECTED",
+            "REJECT"
+        ]:
+
+            interview_status = "Rejected"
+
+        else:
+
+            interview_status = "Further Review"
+
+        # -------------------------------------------------
+        # Save interview result in MongoDB
+        # -------------------------------------------------
+
+        await candidate_collection.update_one(
+            {
+                "_id": ObjectId(
+                    request.candidate_id
+                )
+            },
+            {
+                "$set": {
+
+                    "interview_status":
+                        interview_status,
+
+                    "interview_score":
+                        overall_score,
+
+                    "interview_recommendation":
+                        recommendation,
+
+                    "interview_evaluation":
+                        evaluation,
+
+                    "interview_completed_at":
+                        datetime.utcnow(),
+
+                    "interview_job_id":
+                        request.job_id
+                }
+            }
+        )
+
+        # -------------------------------------------------
+        # Return result
+        # -------------------------------------------------
+
         return {
             "success": True,
-            "candidate": candidate.get("name", ""),
-            "job": job.get("title", ""),
-            "evaluation": evaluation
+
+            "candidate":
+                candidate.get(
+                    "name",
+                    ""
+                ),
+
+            "job":
+                job.get(
+                    "title",
+                    ""
+                ),
+
+            "evaluation":
+                evaluation,
+
+            "candidate_status":
+                interview_status
         }
 
     except HTTPException:
+
         raise
 
     except Exception as e:
+
         raise HTTPException(
             status_code=500,
             detail=f"Interview evaluation failed: {str(e)}"
