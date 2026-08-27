@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from google import genai
 from dotenv import load_dotenv
 
@@ -266,6 +267,7 @@ RULES FOR THE JSON:
             "Gemini returned an invalid JSON response."
         )
 
+
 def evaluate_interview(
     candidate,
     job,
@@ -286,24 +288,38 @@ def evaluate_interview(
     - Recommendation
     """
 
+    # ---------------------------------------------------------
+    # Build conversation text
+    # ---------------------------------------------------------
+
     conversation_text = ""
 
     for message in messages:
+
         sender = (
             "AI Interviewer"
-            if message["sender"] == "ai"
+            if message.get("sender") == "ai"
             else "Candidate"
         )
 
         conversation_text += (
-            f"{sender}: {message['text']}\n"
+            f"{sender}: {message.get('text', '')}\n"
         )
+
+    # ---------------------------------------------------------
+    # Evaluation prompt
+    # ---------------------------------------------------------
 
     prompt = f"""
 You are an expert technical interviewer and recruitment evaluator.
 
-Evaluate the candidate based ONLY on the job requirements,
-candidate profile, and the complete interview conversation.
+Evaluate the candidate based ONLY on:
+
+1. Candidate profile
+2. Job requirements
+3. Complete interview conversation
+
+Do NOT assume knowledge that the candidate did not demonstrate.
 
 CANDIDATE
 
@@ -345,39 +361,45 @@ COMPLETE INTERVIEW
 
 EVALUATION RULES
 
-1. Evaluate ONLY based on the candidate's actual answers.
+Evaluate the candidate objectively.
 
-2. Do not assume knowledge that the candidate did not demonstrate.
+Give each category a score from 0 to 10:
 
-3. Compare the candidate's answers with the job requirements.
+- technical_correctness
+- understanding
+- problem_solving
+- communication
+- relevance_to_role
 
-4. Consider the complete interview, not just one answer.
+Calculate overall_score as the average of these five scores.
 
-5. Do not penalize the candidate for not knowing technologies
-   that are not required by the job.
+Recommendation rules:
 
-6. Be objective and professional.
+SELECTED:
+overall_score >= 7
 
-7. Give scores from 0 to 10.
+FURTHER REVIEW:
+overall_score >= 5 and overall_score < 7
 
-8. Calculate an overall score from the category scores.
+REJECTED:
+overall_score < 5
 
-9. Recommendation rules:
+Do not give SELECTED unless the candidate demonstrated sufficient knowledge
+during the interview.
 
-   - SELECTED:
-     Strong match for the role and overall score >= 7.
+Give concise and useful feedback.
 
-   - FURTHER REVIEW:
-     Moderate match and overall score between 5 and 6.9.
-
-   - REJECTED:
-     Weak match or overall score < 5.
-
-10. Give concise but useful feedback.
+IMPORTANT:
 
 Return ONLY valid JSON.
 
-Return exactly this structure:
+Do NOT use markdown.
+
+Do NOT use ```json.
+
+Do NOT include any text before or after the JSON.
+
+Return exactly:
 
 {{
     "overall_score": 0,
@@ -391,15 +413,178 @@ Return exactly this structure:
 }}
 """
 
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=prompt
-    )
+    # ---------------------------------------------------------
+    # Call Gemini
+    # ---------------------------------------------------------
+
+    try:
+
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=prompt
+        )
+
+    except Exception as e:
+
+        print("Gemini evaluation error:", str(e))
+
+        raise Exception(
+            f"Gemini evaluation failed: {str(e)}"
+        )
+
+    # ---------------------------------------------------------
+    # Get Gemini response
+    # ---------------------------------------------------------
+
+    if not response or not response.text:
+
+        raise Exception(
+            "Gemini returned an empty evaluation response."
+        )
 
     text = response.text.strip()
 
+    print("RAW GEMINI EVALUATION:")
+    print(text)
+
+    # ---------------------------------------------------------
+    # Remove markdown code fences if Gemini adds them
+    # ---------------------------------------------------------
+
     text = text.replace("```json", "")
+    text = text.replace("```JSON", "")
     text = text.replace("```", "")
     text = text.strip()
 
-    return json.loads(text)
+    # ---------------------------------------------------------
+    # Extract JSON object
+    #
+    # This protects against Gemini returning something like:
+    #
+    # Here is the evaluation:
+    # { ... }
+    # ---------------------------------------------------------
+
+    match = re.search(
+        r"\{[\s\S]*\}",
+        text
+    )
+
+    if not match:
+
+        raise Exception(
+            "Gemini did not return valid JSON."
+        )
+
+    json_text = match.group(0)
+
+    # ---------------------------------------------------------
+    # Parse JSON
+    # ---------------------------------------------------------
+
+    try:
+
+        evaluation = json.loads(json_text)
+
+    except json.JSONDecodeError as e:
+
+        print("JSON parsing error:", str(e))
+        print("Gemini response:", json_text)
+
+        raise Exception(
+            f"Invalid JSON returned by Gemini: {str(e)}"
+        )
+
+    # ---------------------------------------------------------
+    # Validate required fields
+    # ---------------------------------------------------------
+
+    required_fields = [
+        "technical_correctness",
+        "understanding",
+        "problem_solving",
+        "communication",
+        "relevance_to_role"
+    ]
+
+    for field in required_fields:
+
+        if field not in evaluation:
+
+            evaluation[field] = 0
+
+        try:
+
+            evaluation[field] = float(
+                evaluation[field]
+            )
+
+        except (ValueError, TypeError):
+
+            evaluation[field] = 0
+
+        # Keep score between 0 and 10
+        evaluation[field] = max(
+            0,
+            min(
+                10,
+                evaluation[field]
+            )
+        )
+
+    # ---------------------------------------------------------
+    # Calculate overall score ourselves
+    #
+    # This prevents Gemini from giving an incorrect average.
+    # ---------------------------------------------------------
+
+    scores = [
+        evaluation["technical_correctness"],
+        evaluation["understanding"],
+        evaluation["problem_solving"],
+        evaluation["communication"],
+        evaluation["relevance_to_role"]
+    ]
+
+    overall_score = sum(scores) / len(scores)
+
+    evaluation["overall_score"] = round(
+        overall_score,
+        1
+    )
+
+    # ---------------------------------------------------------
+    # Determine recommendation ourselves
+    # ---------------------------------------------------------
+
+    if overall_score >= 7:
+
+        evaluation["recommendation"] = "SELECTED"
+
+    elif overall_score >= 5:
+
+        evaluation["recommendation"] = "FURTHER REVIEW"
+
+    else:
+
+        evaluation["recommendation"] = "REJECTED"
+
+    # ---------------------------------------------------------
+    # Make sure feedback exists
+    # ---------------------------------------------------------
+
+    if not evaluation.get("feedback"):
+
+        evaluation["feedback"] = (
+            "The candidate was evaluated based on "
+            "their interview responses and job requirements."
+        )
+
+    # ---------------------------------------------------------
+    # Return final evaluation
+    # ---------------------------------------------------------
+
+    print("FINAL EVALUATION:")
+    print(evaluation)
+
+    return evaluation
