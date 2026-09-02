@@ -1,113 +1,252 @@
 import { useState, useEffect } from "react";
 import API from "../../api/api";
+
 import UploadBox from "../../components/Upload/UploadBox";
 import ProgressBar from "../../components/Upload/ProgressBar";
 import ExtractedInfo from "../../components/Upload/ExtractedInfo";
 import SectionTitle from "../../components/Common/SectionTitle";
 
-function ResumeUpload() {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [progress, setProgress] = useState(0);
 
-  // Temporary dummy data
-  const [candidate, setCandidate] = useState(null);
-  const [candidates, setCandidates] = useState([]);
+function ResumeUpload() {
+
+  const [selectedFile, setSelectedFile] =
+    useState(null);
+
+  const [progress, setProgress] =
+    useState(0);
+
+  const [candidate, setCandidate] =
+    useState(null);
+
+  const [candidates, setCandidates] =
+    useState([]);
+
+
+  // =====================================================
+  // FETCH CANDIDATES
+  // =====================================================
 
   const fetchCandidates = async () => {
-  try {
-    const response = await API.get("/candidates");
 
-    setCandidates(response.data);
-  } catch (error) {
-    console.error(error);
-  }
-};
+    try {
 
-useEffect(() => {
-  fetchCandidates();
-}, []);
+      const response =
+        await API.get("/candidates");
+
+      setCandidates(
+        response.data
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Failed to fetch candidates:",
+        error
+      );
+
+    }
+  };
+
+
+  // =====================================================
+  // INITIAL LOAD
+  // =====================================================
+
+  useEffect(() => {
+
+    fetchCandidates();
+
+  }, []);
+
 
   return (
-  <div className="space-y-8">
 
-    <SectionTitle
-      title="Resume Parsing & Candidate Profiling"
-      subtitle="Upload PDF or DOCX resumes to extract candidate information using AI."
-    />
+    <div className="space-y-8">
 
-    <UploadBox
-      selectedFile={selectedFile}
-      setSelectedFile={setSelectedFile}
-      setProgress={setProgress}
-      setCandidate={setCandidate}
-      fetchCandidates={fetchCandidates}
-    />
+      {/* =================================================
+          PAGE TITLE
+          ================================================= */}
 
-    {selectedFile && (
-      <ProgressBar progress={progress} />
-    )}
+      <SectionTitle
+        title="Resume Parsing & Candidate Profiling"
+        subtitle="Upload one or multiple PDF, DOC or DOCX resumes to extract candidate information."
+      />
 
-    {candidate && (
-      <ExtractedInfo candidate={candidate} />
-    )}
 
-    {/* List of Uploaded Candidates */}
+      {/* =================================================
+          UPLOAD BOX
+          ================================================= */}
 
-    <div className="bg-white rounded-3xl shadow p-8">
-      <h2 className="text-2xl font-bold mb-6">
-        Uploaded Candidates
-      </h2>
+      <UploadBox
+        selectedFile={selectedFile}
+        setSelectedFile={setSelectedFile}
+        setProgress={setProgress}
+        setCandidate={setCandidate}
+        fetchCandidates={fetchCandidates}
+      />
 
-      {candidates.length === 0 ? (
-        <p className="text-gray-500">
-          No candidates uploaded yet.
-        </p>
-      ) : (
-        <div className="space-y-4">
 
-          {candidates.map((candidate) => (
+      {/* =================================================
+          PROGRESS BAR
+          ================================================= */}
 
-            <div
-              key={candidate._id}
-              className="border rounded-xl p-5 hover:bg-gray-50 transition"
-            >
+      {selectedFile && (
 
-              <h3 className="text-lg font-semibold">
-                {candidate.name}
-              </h3>
+        <ProgressBar
+          progress={progress}
+        />
 
-              <p className="text-gray-600">
-                {candidate.email}
-              </p>
-
-              <p className="text-gray-500">
-                {candidate.phone}
-              </p>
-
-              <div className="flex flex-wrap gap-2 mt-3">
-
-                {candidate.skills?.map((skill, index) => (
-                  <span
-                    key={index}
-                    className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm"
-                  >
-                    {skill}
-                  </span>
-                ))}
-
-              </div>
-
-            </div>
-
-          ))}
-
-        </div>
       )}
+
+
+      {/* =================================================
+          EXTRACTED INFORMATION
+          ================================================= */}
+
+      {candidate && (
+
+        <ExtractedInfo
+          candidate={candidate}
+        />
+
+      )}
+
+
+      {/* =================================================
+          UPLOADED CANDIDATES
+          ================================================= */}
+
+      <div
+        className="
+          bg-white
+          rounded-3xl
+          shadow
+          p-8
+        "
+      >
+
+        <h2 className="text-2xl font-bold mb-6">
+
+          Uploaded Candidates
+
+        </h2>
+
+
+        {candidates.length === 0 ? (
+
+          <p className="text-gray-500">
+
+            No candidates uploaded yet.
+
+          </p>
+
+        ) : (
+
+          <div className="space-y-4">
+
+            {candidates.map(
+              (candidate) => (
+
+                <div
+                  key={candidate._id}
+                  className="
+                    border
+                    rounded-xl
+                    p-5
+                    hover:bg-gray-50
+                    transition
+                  "
+                >
+
+                  {/* NAME */}
+
+                  <h3 className="text-lg font-semibold">
+
+                    {candidate.name}
+
+                  </h3>
+
+
+                  {/* EMAIL */}
+
+                  {candidate.email && (
+
+                    <p className="text-gray-600">
+
+                      {candidate.email}
+
+                    </p>
+
+                  )}
+
+
+                  {/* PHONE */}
+
+                  {candidate.phone && (
+
+                    <p className="text-gray-500">
+
+                      {candidate.phone}
+
+                    </p>
+
+                  )}
+
+
+                  {/* SKILLS */}
+
+                  {candidate.skills &&
+                    candidate.skills.length > 0 && (
+
+                    <div
+                      className="
+                        flex
+                        flex-wrap
+                        gap-2
+                        mt-3
+                      "
+                    >
+
+                      {candidate.skills.map(
+                        (skill, index) => (
+
+                          <span
+                            key={index}
+                            className="
+                              bg-indigo-100
+                              text-indigo-700
+                              px-3
+                              py-1
+                              rounded-full
+                              text-sm
+                            "
+                          >
+
+                            {skill}
+
+                          </span>
+
+                        )
+                      )}
+
+                    </div>
+
+                  )}
+
+                </div>
+
+              )
+            )}
+
+          </div>
+
+        )}
+
+      </div>
 
     </div>
 
-  </div>
-);
+  );
 }
 
 export default ResumeUpload;
