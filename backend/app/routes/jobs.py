@@ -200,6 +200,8 @@ class InterviewChatRequest(BaseModel):
     job_id: str
     messages: List[InterviewMessage]
 
+class CandidateStatusUpdate(BaseModel):
+    status: str
 
 # =========================================================
 # START / CONTINUE AI INTERVIEW
@@ -363,8 +365,13 @@ async def evaluate_completed_interview(
     Evaluate the candidate after the recruiter ends
     the interview.
 
-    The final AI recommendation is saved to the
-    candidate's MongoDB document.
+    AI recommendation:
+        SELECTED      -> Shortlisted
+        FURTHER REVIEW -> Further Review
+        REJECTED      -> Rejected
+
+    The recruiter can later manually change the
+    candidate to Hired, Shortlisted, or Rejected.
     """
 
     try:
@@ -400,7 +407,7 @@ async def evaluate_completed_interview(
             )
 
         # -------------------------------------------------
-        # Convert MongoDB IDs
+        # Convert MongoDB IDs to strings for AI
         # -------------------------------------------------
 
         candidate["_id"] = str(
@@ -448,15 +455,20 @@ async def evaluate_completed_interview(
         )
 
         # -------------------------------------------------
-        # Update candidate status
+        # Normalize recommendation
         # -------------------------------------------------
 
-        # Normalize recommendation
         recommendation_upper = str(
             recommendation
-        ).upper()
+        ).strip().upper()
+
+        # -------------------------------------------------
+        # Determine recruitment status
+        # -------------------------------------------------
 
         if recommendation_upper == "SELECTED":
+
+            recruitment_status = "Shortlisted"
 
             interview_status = "Selected"
 
@@ -465,14 +477,18 @@ async def evaluate_completed_interview(
             "REJECT"
         ]:
 
+            recruitment_status = "Rejected"
+
             interview_status = "Rejected"
 
         else:
 
+            recruitment_status = "Further Review"
+
             interview_status = "Further Review"
 
         # -------------------------------------------------
-        # Save interview result in MongoDB
+        # Save interview result + recruitment status
         # -------------------------------------------------
 
         await candidate_collection.update_one(
@@ -484,21 +500,31 @@ async def evaluate_completed_interview(
             {
                 "$set": {
 
+                    # Recruitment pipeline status
+                    "status":
+                        recruitment_status,
+
+                    # Interview-specific status
                     "interview_status":
                         interview_status,
 
+                    # Interview score
                     "interview_score":
                         overall_score,
 
+                    # AI recommendation
                     "interview_recommendation":
                         recommendation,
 
+                    # Complete evaluation
                     "interview_evaluation":
                         evaluation,
 
+                    # Interview completion time
                     "interview_completed_at":
                         datetime.utcnow(),
 
+                    # Job for which interview was conducted
                     "interview_job_id":
                         request.job_id
                 }
@@ -528,7 +554,7 @@ async def evaluate_completed_interview(
                 evaluation,
 
             "candidate_status":
-                interview_status
+                recruitment_status
         }
 
     except HTTPException:
@@ -539,5 +565,121 @@ async def evaluate_completed_interview(
 
         raise HTTPException(
             status_code=500,
-            detail=f"Interview evaluation failed: {str(e)}"
+            detail=(
+                f"Interview evaluation failed: {str(e)}"
+            )
+        )
+
+@router.patch("/candidates/{candidate_id}/status")
+async def update_candidate_status(
+    candidate_id: str,
+    request: CandidateStatusUpdate
+):
+    """
+    Allows the recruiter to manually update
+    a candidate's recruitment status.
+    """
+
+    allowed_statuses = {
+        "Applied",
+        "Screened",
+        "Interviewed",
+        "Shortlisted",
+        "Further Review",
+        "Hired",
+        "Rejected"
+    }
+
+    # -------------------------------------------------
+    # Validate status
+    # -------------------------------------------------
+
+    if request.status not in allowed_statuses:
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid status. Allowed statuses are: "
+                "Applied, Screened, Interviewed, "
+                "Shortlisted, Further Review, Hired, Rejected"
+            )
+        )
+
+    try:
+
+        # -------------------------------------------------
+        # Find candidate
+        # -------------------------------------------------
+
+        candidate = await candidate_collection.find_one(
+            {
+                "_id": ObjectId(candidate_id)
+            }
+        )
+
+        if not candidate:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Candidate not found"
+            )
+
+        # -------------------------------------------------
+        # Prepare update
+        # -------------------------------------------------
+
+        update_data = {
+            "status": request.status
+        }
+
+        # -------------------------------------------------
+        # If candidate is hired, store hiring time
+        # -------------------------------------------------
+
+        if request.status == "Hired":
+
+            # Don't overwrite the original hiring date
+            if not candidate.get("hired_at"):
+
+                update_data["hired_at"] = datetime.utcnow()
+
+        # -------------------------------------------------
+        # Update candidate
+        # -------------------------------------------------
+
+        await candidate_collection.update_one(
+            {
+                "_id": ObjectId(candidate_id)
+            },
+            {
+                "$set": update_data
+            }
+        )
+
+        # -------------------------------------------------
+        # Return updated information
+        # -------------------------------------------------
+
+        return {
+            "success": True,
+            "message": (
+                f"Candidate status changed to "
+                f"{request.status}"
+            ),
+            "candidate_id": candidate_id,
+            "status": request.status
+        }
+
+    except HTTPException:
+
+        raise
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Failed to update candidate status: "
+                f"{str(e)}"
+            )
         )

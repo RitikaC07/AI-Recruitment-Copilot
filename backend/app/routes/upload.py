@@ -3,6 +3,8 @@ from app.services.resume_parser import parse_resume
 from app.services.text_extractor import extract_text
 from app.database import candidate_collection
 
+from datetime import datetime
+
 import os
 import shutil
 import uuid
@@ -162,6 +164,16 @@ async def upload_resume(
                 continue
 
             # =============================================
+            # ADD RECRUITMENT INFORMATION
+            # =============================================
+
+            # Every new candidate starts as Applied
+            candidate["status"] = "Applied"
+
+            # Store when the candidate was added
+            candidate["created_at"] = datetime.utcnow()
+
+            # =============================================
             # INSERT VALID CANDIDATE
             # =============================================
 
@@ -169,6 +181,8 @@ async def upload_resume(
                 candidate
             )
 
+            # Convert MongoDB ObjectId to string
+            # for the response
             candidate["_id"] = str(
                 result.inserted_id
             )
@@ -206,6 +220,7 @@ async def upload_resume(
 
                 try:
                     os.remove(file_path)
+
                 except Exception:
                     pass
 
@@ -283,3 +298,278 @@ async def dashboard_data():
         "recent_candidates":
             candidates
     }
+
+# =========================================================
+# ANALYTICS
+# =========================================================
+
+@router.get("/analytics")
+async def get_analytics():
+
+    try:
+
+        # -------------------------------------------------
+        # Get all candidates
+        # -------------------------------------------------
+
+        candidates = await candidate_collection.find().to_list(None)
+
+        total_candidates = len(candidates)
+
+        # -------------------------------------------------
+        # Recruitment Pipeline
+        # -------------------------------------------------
+
+        pipeline_statuses = [
+            "Applied",
+            "Screened",
+            "Interviewed",
+            "Shortlisted",
+            "Further Review",
+            "Hired",
+            "Rejected"
+        ]
+
+        pipeline = {}
+
+        for status in pipeline_statuses:
+
+            pipeline[status] = sum(
+                1
+                for candidate in candidates
+                if candidate.get("status") == status
+            )
+
+        # -------------------------------------------------
+        # Total Hired
+        # -------------------------------------------------
+
+        total_hired = pipeline["Hired"]
+
+        # -------------------------------------------------
+        # Hiring Success Rate
+        # -------------------------------------------------
+
+        if total_candidates > 0:
+
+            hiring_success_rate = (
+                total_hired / total_candidates
+            ) * 100
+
+        else:
+
+            hiring_success_rate = 0
+
+        # -------------------------------------------------
+        # Average Time to Hire
+        # -------------------------------------------------
+
+        hiring_times = []
+
+        for candidate in candidates:
+
+            created_at = candidate.get(
+                "created_at"
+            )
+
+            hired_at = candidate.get(
+                "hired_at"
+            )
+
+            if created_at and hired_at:
+
+                time_difference = (
+                    hired_at - created_at
+                ).total_seconds() / 86400
+
+                hiring_times.append(
+                    time_difference
+                )
+
+        if hiring_times:
+
+            avg_time_to_hire = (
+                sum(hiring_times)
+                / len(hiring_times)
+            )
+
+        else:
+
+            avg_time_to_hire = 0
+
+        # -------------------------------------------------
+        # Top Skills
+        # -------------------------------------------------
+
+        skill_counts = {}
+
+        for candidate in candidates:
+
+            skills = candidate.get(
+                "skills",
+                []
+            )
+
+            if not isinstance(skills, list):
+                continue
+
+            for skill in skills:
+
+                if not skill:
+                    continue
+
+                skill_name = str(skill)
+
+                skill_counts[skill_name] = (
+                    skill_counts.get(
+                        skill_name,
+                        0
+                    ) + 1
+                )
+
+        # Sort skills by number of candidates
+        sorted_skills = sorted(
+            skill_counts.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+
+        # Return top 10 skills
+        top_skills = [
+            {
+                "skill": skill,
+                "count": count
+            }
+            for skill, count
+            in sorted_skills[:10]
+        ]
+
+        # -------------------------------------------------
+        # Interview Analytics
+        # -------------------------------------------------
+
+        interview_scores = []
+
+        completed_interviews = 0
+
+        for candidate in candidates:
+
+            score = candidate.get(
+                "interview_score"
+            )
+
+            if score is not None:
+
+                try:
+
+                    interview_scores.append(
+                        float(score)
+                    )
+
+                except (
+                    ValueError,
+                    TypeError
+                ):
+
+                    pass
+
+            if candidate.get(
+                "interview_completed_at"
+            ):
+
+                completed_interviews += 1
+
+        # Average interview score
+
+        if interview_scores:
+
+            average_interview_score = (
+                sum(interview_scores)
+                / len(interview_scores)
+            )
+
+        else:
+
+            average_interview_score = 0
+
+        # -------------------------------------------------
+        # Interview Pass Rate
+        #
+        # Candidates with score >= 60 are considered
+        # passed.
+        # -------------------------------------------------
+
+        if interview_scores:
+
+            passed_interviews = sum(
+                1
+                for score in interview_scores
+                if score >= 7
+            )
+
+            interview_pass_rate = (
+                passed_interviews
+                / len(interview_scores)
+            ) * 100
+
+        else:
+
+            interview_pass_rate = 0
+
+        # -------------------------------------------------
+        # Return Analytics
+        # -------------------------------------------------
+
+        return {
+
+            "hiring_success_rate":
+                round(
+                    hiring_success_rate,
+                    2
+                ),
+
+            "avg_time_to_hire":
+                round(
+                    avg_time_to_hire,
+                    2
+                ),
+
+            "total_candidates":
+                total_candidates,
+
+            "total_hired":
+                total_hired,
+
+            "pipeline":
+                pipeline,
+
+            "top_skills":
+                top_skills,
+
+            "interview": {
+
+                "average_score":
+                    round(
+                        average_interview_score,
+                        2
+                    ),
+
+                "pass_rate":
+                    round(
+                        interview_pass_rate,
+                        2
+                    ),
+
+                "completed_interviews":
+                    completed_interviews
+            }
+        }
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Failed to generate analytics: {str(e)}"
+            )
+        )
