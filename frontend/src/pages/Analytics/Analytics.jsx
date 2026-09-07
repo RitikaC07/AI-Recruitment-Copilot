@@ -288,7 +288,8 @@ function Analytics() {
               <Bar
                 dataKey="count"
                 name="Candidates"
-                radius={[6, 6, 0, 0]}
+                fill="#673ac2"
+                radius={[8, 8, 0, 0]}
               />
 
             </BarChart>
@@ -364,7 +365,8 @@ function Analytics() {
                   <Bar
                     dataKey="count"
                     name="Candidates"
-                    radius={[0, 6, 6, 0]}
+                    fill="#673ac2"
+                    radius={[0, 8, 8, 0]}
                   />
 
                 </BarChart>

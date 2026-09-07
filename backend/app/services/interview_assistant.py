@@ -228,10 +228,16 @@ RULES FOR THE JSON:
   calculate the overall interview score from the candidate's
   answers.
 
-- "message" should contain a short natural acknowledgement
-  followed by the next question.
+- "message" must contain ONLY a short natural acknowledgement
+  to the candidate's previous answer.
 
-- "question" should contain ONLY the next interview question.
+- "message" MUST NOT contain the next interview question.
+
+- "question" must contain ONLY the next interview question.
+
+- The question must appear ONLY in the "question" field.
+
+- NEVER put the question inside "message".
 
 - When interview_complete is true:
   "question" must be an empty string.
