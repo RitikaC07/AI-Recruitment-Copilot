@@ -1,13 +1,15 @@
 import os
 import json
-import google.generativeai as genai
+
+from google import genai
 from dotenv import load_dotenv
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-model = genai.GenerativeModel("gemini-2.5-flash")
+# Initialize Gemini client
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY")
+)
 
 
 def parse_resume_with_gemini(resume_text):
@@ -33,11 +35,17 @@ Resume:
 {resume_text}
 """
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-3.6-flash",
+        contents=prompt
+    )
 
     text = response.text.strip()
 
-    # Remove markdown if Gemini wraps the JSON
-    text = text.replace("```json", "").replace("```", "").strip()
+    # Remove Markdown code fences if Gemini returns them
+    text = text.replace("```json", "")
+    text = text.replace("```", "")
+    text = text.strip()
 
     return json.loads(text)
+

@@ -10,7 +10,7 @@ python-dotenv
 pymupdf
 pdfplumber
 
-google-generativeai
+google-genai
 
 pydantic
 pydantic-settings

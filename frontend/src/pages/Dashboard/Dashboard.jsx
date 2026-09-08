@@ -10,7 +10,7 @@ import {
 import API from "../../api/api";
 
 import StatCard from "../../components/cards/StatCard";
-import SectionTitle from "../../components/common/SectionTitle";
+import SectionTitle from "../../components/Common/SectionTitle";
 import RecentCandidates from "../../components/tables/RecentCandidates";
 
 function Dashboard() {

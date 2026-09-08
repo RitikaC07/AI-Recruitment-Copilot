@@ -8,7 +8,6 @@ import {
   Brain,
   MessageSquare,
   BarChart3,
-  Settings,
 } from "lucide-react";
 
 
@@ -48,11 +47,7 @@ const menuItems = [
     path: "/analytics",
     icon: BarChart3,
   },
-  {
-    name: "Settings",
-    path: "/settings",
-    icon: Settings,
-  },
+  
 ];
 
 

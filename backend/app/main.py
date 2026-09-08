@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -5,13 +7,15 @@ from app.routes.upload import router as upload_router
 from app.routes.jobs import router as jobs_router
 from app.routes.matching import router as matching_router
 
+
 app = FastAPI(
     title="AI Recruitment Copilot API",
     version="1.0.0",
     description="Backend API for AI Recruitment Copilot"
 )
 
-# Allow React Frontend
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -19,6 +23,7 @@ app.add_middleware(
         "http://localhost:5174",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
+        FRONTEND_URL,
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -28,6 +33,7 @@ app.add_middleware(
 app.include_router(upload_router)
 app.include_router(jobs_router)
 app.include_router(matching_router)
+
 
 @app.get("/")
 async def root():
