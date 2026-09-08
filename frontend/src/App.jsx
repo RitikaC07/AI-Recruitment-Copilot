@@ -8,7 +8,6 @@ import Candidates from "./pages/Candidates/Candidates";
 import CandidateProfile from "./pages/CandidateProfile/CandidateProfile";
 import AIMatching from "./pages/AIMatching/AIMatching";
 import Analytics from "./pages/Analytics/Analytics";
-import Settings from "./pages/Settings/Settings";
 import Login from "./pages/Login/Login";
 import InterviewAssistant from "./pages/InterviewAssistant/InterviewAssistant";
 
@@ -26,7 +25,6 @@ function App() {
           <Route path="/jobs" element={<JobPostings />} />
           <Route path="/matching" element={<AIMatching />} />
           <Route path="/analytics" element={<Analytics />} />
-          <Route path="/settings" element={<Settings />} />
           <Route path="/interview" element={<InterviewAssistant />}/>
         </Route>
 
