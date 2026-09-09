@@ -9,9 +9,9 @@ import {
 
 import API from "../../api/api";
 
-import StatCard from "../../components/cards/StatCard";
+import StatCard from "../../components/Cards/StatCard";
 import SectionTitle from "../../components/Common/SectionTitle";
-import RecentCandidates from "../../components/tables/RecentCandidates";
+import RecentCandidates from "../../components/Tables/RecentCandidates";
 
 function Dashboard() {
   const [dashboardData, setDashboardData] = useState({
