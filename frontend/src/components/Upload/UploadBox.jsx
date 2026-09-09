@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import API from "../../api/api";
 import { UploadCloud } from "lucide-react";
 
 function UploadBox({
@@ -115,8 +115,8 @@ function UploadBox({
 
       setUploading(true);
 
-      const response = await axios.post(
-        "http://127.0.0.1:8000/resume",
+      const response = await API.post(
+        "/resume",
         formData,
         {
           headers: {
