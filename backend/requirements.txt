@@ -17,3 +17,5 @@ pydantic-settings
 
 aiofiles
 python-docx
+
+spacy
